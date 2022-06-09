@@ -2,55 +2,50 @@ const wrapper = document.querySelector('.wrapper');
 const input = document.querySelector('#input');
 const list = document.querySelector('#list');
 
-wrapper.addEventListener('click', (e) => {
+wrapper.addEventListener('click', handleClick);
+
+async function handleClick(e) {
     let action = e.target.dataset.action;
     let element = e.target;
 
     switch (action) {
         case 'create':
-            let data = JSON.stringify({
-                task: input.value,
-                complited: false
-            });
+            try {
+                const data = JSON.stringify({
+                    task: input.value,
+                    complited: false
+                });
 
-            createUpdateTodo('', 'POST', data)
-                .then((res) => {
-                    let newLi = document.createElement('li');
-                    newLi.classList.add('in-progress');
-                    newLi.dataset.id = res.id;
-
-                    newLi.innerHTML = `<input class="me-1" type="checkbox" value="" data-action="update">${res.task}`;
-
-                    list.append(newLi);
-                    input.value = '';
-                })
-                .catch((err) => console.log('Error: ' + err))
-
+                const result = await createUpdateTodo('POST','', data);
+                renderNewTodo(result);
+            } catch(err) {
+                console.error('Error: ' + err);
+            }
             break;
         case 'delete':
-            const conf = confirm('Are you sure?');
+            try {
+                const conf = confirm('Are you sure?');
 
-            if (conf) {
-                deleteTodos(+element.dataset.id)
-                    .then((res) => {
-                        console.log(res);
-                        element.closest('li').remove();
-                    })
-                    .catch((err) => console.warn('Error: ' + err))
+                if (conf) {
+                    await deleteTodos(+element.dataset.id);
+                    element.closest('li').remove();
+                }
+            } catch(err) {
+                console.error('Error: ' + err);
             }
-
             break;
         case 'update':
-            createUpdateTodo(+element.value, 'PATCH', JSON.stringify({complited: element.checked}))
-                .then(() => {
-                    element.closest('li').classList.toggle('done');
-                })
-                .catch((err) => console.warn('Error: ' + err))
+            try {
+                await createUpdateTodo('PATCH', +element.value, JSON.stringify({complited: element.checked}));
+                element.closest('li').classList.toggle('done');
+            } catch(err) {
+                console.error('Error: ' + err);
+            }
             break;
     }
-});
+}
 
-function renderTodos() {
+async function getTodos() {
     return new Promise(function(resolve, reject) {
         const xhr = new XMLHttpRequest();
 
@@ -70,7 +65,7 @@ function renderTodos() {
     });
 };
 
-function createUpdateTodo(todoId, type, data) {
+async function createUpdateTodo(type, todoId, data) {
     return new Promise(function(resolve, reject) {
         const xhr = new XMLHttpRequest();
         let url = 'http://localhost:3000/todos/';
@@ -88,7 +83,7 @@ function createUpdateTodo(todoId, type, data) {
         xhr.onload = function() {
             let status = xhr.status;
 
-            if (status === 200) {
+            if (status === 201 || status === 200) {
                 resolve(xhr.response);
             } else {
                 reject('Status ' + status);
@@ -102,7 +97,7 @@ function createUpdateTodo(todoId, type, data) {
     });
 };
 
-function deleteTodos(id) {
+async function deleteTodos(id) {
     return new Promise(function(resolve, reject) {
         const xhr = new XMLHttpRequest();
 
@@ -122,13 +117,17 @@ function deleteTodos(id) {
     });
 };
 
-renderTodos()
-    .then((todos) => {
+async function renderTodos() {
+    try {
+        const todos = await getTodos();
+
         let lis = '';
+
         for (const todo of todos) {
             if (!todo) {
                 return;
             }
+
             lis += `<li ${todo.complited ? 'class="done"' : ''}>
                         <input class="me-1" type="checkbox" value="${todo.id}" data-action="update" ${todo.complited ? 'checked' : ''}>
                         <span class="task-name">${todo.task}</span>
@@ -138,5 +137,23 @@ renderTodos()
         }
 
         list.innerHTML = lis;
-    })
-    .catch((err) => console.log(err))
+    } catch (err) {
+        console.error('Error: ' + err);
+    }
+
+}
+
+function renderNewTodo(data) {
+    let newLi = document.createElement('li');
+    newLi.classList.add('in-progress');
+
+    newLi.innerHTML = `<input class="me-1" type="checkbox" value="${data.id}" data-action="update">
+                    <span class="task-name">${data.task}</span>
+                    <span class="spacer"></span>
+                    <span class="material-symbols-outlined text-danger delete" data-action="delete" data-id="${data.id}">close</span>`;
+
+    list.append(newLi);
+    input.value = '';
+}
+
+renderTodos();
